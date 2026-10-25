@@ -856,7 +856,7 @@ const PIP={w:640,h:360};
 if(!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h){ this.rect(x,y,w,h); };
 const pipCanvas=document.createElement("canvas"); pipCanvas.width=PIP.w; pipCanvas.height=PIP.h;
 const pipVideo=$("pipVideo"); let pipStream=null, pipTimer=null;
-const pipOk = !!(document.pictureInPictureEnabled && pipCanvas.captureStream && pipVideo.requestPictureInPicture);
+const pipOk = !!(pipCanvas.captureStream && ((document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) || pipVideo.webkitSupportsPresentationMode));
 function drawPip(){
   const c=pipCanvas.getContext("2d"), W=PIP.w, H=PIP.h;
   const D="'Big Shoulders Display','Arial Narrow',Impact,sans-serif", B="'IBM Plex Sans',system-ui,sans-serif";
@@ -904,11 +904,23 @@ function drawPip(){
 async function openPip(){
   try{
     if(document.pictureInPictureElement){ await document.exitPictureInPicture(); return; }
+    if(pipVideo.webkitPresentationMode==="picture-in-picture"){ pipVideo.webkitSetPresentationMode("inline"); return; }
     drawPip();
     if(!pipStream){ pipStream=pipCanvas.captureStream(4); pipVideo.srcObject=pipStream; }
     await pipVideo.play();
-    await pipVideo.requestPictureInPicture();
-  }catch(e){ console.error(e); alert("Seu navegador não permitiu abrir o placar flutuante. No celular, use o Chrome (Android) ou o Safari (iPhone)."); }
+    if(document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) await pipVideo.requestPictureInPicture();
+    else if(pipVideo.webkitSupportsPresentationMode && pipVideo.webkitSupportsPresentationMode("picture-in-picture")) pipVideo.webkitSetPresentationMode("picture-in-picture");
+    else throw new Error("sem suporte");
+    clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
+  }catch(e){ pipIndisponivel(); }
+}
+/* Sem alerta: avisa na própria página e esconde o botão. Navegador dentro de outro
+   app (WhatsApp, Instagram) costuma bloquear o modo flutuante. */
+function pipIndisponivel(){
+  clearInterval(pipTimer);
+  document.querySelectorAll("[data-pip]").forEach(b=>{ b.hidden=true; });
+  const row=$("pipRow");
+  if(row){ row.hidden=false; row.innerHTML='<span>O placar flutuante não funciona neste navegador. Abra <b>apuracaodaurna.github.io</b> direto no Chrome ou no Safari — dentro do WhatsApp ou do Instagram esse recurso fica bloqueado.</span>'; }
 }
 pipVideo.addEventListener("enterpictureinpicture",()=>{ clearInterval(pipTimer); pipTimer=setInterval(drawPip,500); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Fechar":"Fechar placar flutuante"); });
 pipVideo.addEventListener("leavepictureinpicture",()=>{ clearInterval(pipTimer); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Flutuante":"Abrir placar flutuante"); });
