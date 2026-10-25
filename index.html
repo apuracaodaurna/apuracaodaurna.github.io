@@ -83,6 +83,13 @@ h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:
 .wordmark{display:grid;line-height:1}
 .wordmark b{font-family:var(--f-display);font-weight:900;font-size:24px;letter-spacing:.03em;text-transform:uppercase}
 .wordmark small{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-top:4px}
+.online{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--ok) 45%,transparent);background:color-mix(in srgb,var(--ok) 12%,transparent);
+  color:var(--text);font-size:13px;white-space:nowrap;flex:none}
+.online i{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:blink 1.6s infinite}
+.online b{font-weight:700;font-variant-numeric:tabular-nums}
+.online .t{color:var(--muted);font-size:12px}
+@media (max-width:420px){ .online .t{display:none} }
 .theme-btn{all:unset;cursor:pointer;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);color:var(--muted);flex:none}
 .theme-btn:hover{color:var(--text);border-color:var(--muted)}
 .theme-btn svg{width:19px;height:19px}
@@ -297,6 +304,7 @@ footer p{margin:.3em 0;max-width:80ch}
 <div class="ticker">
   <div class="wrap">
     <a class="brand" href="./" aria-label="P10 Apuração da Urna, início"><span class="logo" aria-hidden="true">P10</span><span class="wordmark"><b>Apuração da Urna</b><small>P10 · Ao vivo do TSE</small></span></a>
+      <span class="online" id="online" hidden><i aria-hidden="true"></i><b class="num" id="onlineN">0</b><span class="t">vendo agora</span></span>
     <div class="status">
       <span class="pill" id="pill"><span class="dot"></span><span id="pillTxt">Aguardando</span></span>
       <span id="clock" class="num"></span>
@@ -501,6 +509,13 @@ const CONFIG = {
   inicioDivulgacao: "2026-10-25T17:00:00-03:00",
   pollBrMs: 30000,
   pollUfMs: 60000,
+};
+/* Contador de quem está vendo agora (Supabase Realtime Presence).
+   Vazio = contador desligado; o site funciona igual, só não mostra o selo. */
+const PRESENCA = {
+  url: "",   // Project URL do Supabase
+  key: "",   // chave anon public
+  canal: "apuracao-2t-2026",
 };
 const MONETIZACAO = {
   adsenseClient: "",           // ex.: "ca-pub-1234567890123456"
@@ -934,6 +949,42 @@ function updateTitle(){
   document.title = br&&br.hasVotes ? `🔴 Lula ${fmtP(br.l)} × ${fmtP(br.f)} Flávio · Apuração da Urna` : baseTitle;
 }
 
+/* ======== QUEM ESTÁ VENDO AGORA ========
+   Contagem real de abas conectadas, via canal de presença do Supabase.
+   Carrega depois da página e falha em silêncio: se o serviço não responder,
+   o selo simplesmente não aparece e o placar continua normal. */
+function mostrarOnline(n){
+  const el=$("online");
+  if(!(n>0)){ el.hidden=true; return; }
+  $("onlineN").textContent=fmtN(n); el.hidden=false;
+}
+function initPresenca(){
+  if(!PRESENCA.url || !PRESENCA.key) return;
+  const s=document.createElement("script");
+  s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+  s.async=true; s.crossOrigin="anonymous";
+  s.onerror=()=>{};
+  s.onload=()=>{
+    try{
+      const cli=window.supabase.createClient(PRESENCA.url,PRESENCA.key,{
+        auth:{persistSession:false},
+        realtime:{params:{eventsPerSecond:1}},
+      });
+      const eu=Math.random().toString(36).slice(2);
+      const ch=cli.channel(PRESENCA.canal,{config:{presence:{key:eu}}});
+      ch.on("presence",{event:"sync"},()=>{
+        try{ mostrarOnline(Object.keys(ch.presenceState()).length); }catch(e){}
+      });
+      ch.subscribe(st=>{
+        if(st==="SUBSCRIBED") ch.track({em:Date.now()}).catch(()=>{});
+        if(st==="CHANNEL_ERROR"||st==="TIMED_OUT") mostrarOnline(0);
+      });
+      addEventListener("pagehide",()=>{ try{ ch.untrack(); cli.removeAllChannels(); }catch(e){} });
+    }catch(e){}
+  };
+  document.head.appendChild(s);
+}
+
 /* ======== MODO CLARO / ESCURO ======== */
 function applyTheme(t){
   document.documentElement.setAttribute("data-theme",t);
@@ -959,7 +1010,7 @@ function applyTheme(t){
 /* ======== INÍCIO ======== */
 setPhoto("phL",SQ_INICIAL.l); setPhoto("phF",SQ_INICIAL.f);
 try{ initMap(); }catch(e){ console.error(e); }
-initAds(); initShare();
+initAds(); initShare(); initPresenca();
 if(!started()) setMode("t1");
 render(); pollBr();
 setInterval(()=>{ renderStatus(); if(started() && !S.br && !brTimer) pollBr(); },1000);
