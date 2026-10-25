@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Teste do placar flutuante</title>
+<meta name="theme-color" content="#080B14">
+<meta name="robots" content="noindex">
+<style>
+:root{color-scheme:dark;--ink:#080B14;--panel:#101626;--line:#1E2840;--text:#E9EDF7;--muted:#8C97B2;--gold:#F2C14E;--ok:#3DDC97;--bad:#E8414B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px 16px 60px}
+main{max-width:620px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+button{all:unset;cursor:pointer;display:block;width:100%;text-align:center;background:var(--gold);color:#1a1405;font-weight:700;padding:16px;border-radius:12px;font-size:17px;margin:14px 0}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600;font-size:14px;padding:11px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.card h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.chk{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14px;border-bottom:1px solid var(--line)}
+.chk:last-child{border-bottom:0}
+.chk b{font-weight:600}
+.sim{color:var(--ok)} .nao{color:var(--bad)}
+#log{font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#05070d;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:320px;overflow:auto;color:#c7d0e4}
+#palco{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+video{position:fixed;left:8px;bottom:8px;width:120px;height:68px;opacity:.01;pointer-events:none}
+a{color:var(--gold)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Teste do placar flutuante</h1>
+  <p class="sub">Página de teste, separada do site. Nada aqui afeta o placar que está no ar.</p>
+
+  <div class="card">
+    <h2>O que este aparelho suporta</h2>
+    <div id="suporte"></div>
+  </div>
+
+  <canvas id="palco" width="640" height="360"></canvas>
+
+  <button id="tentar">Tentar abrir o placar flutuante</button>
+  <button class="ghost" id="copiar">Copiar o relatório para mandar no chat</button>
+
+  <div class="card">
+    <h2>Relatório</h2>
+    <div id="log"></div>
+  </div>
+
+  <p class="sub"><a href="./">← voltar para o placar</a></p>
+</main>
+
+<video id="v" playsinline muted autoplay></video>
+
+<script>
+const $=id=>document.getElementById(id);
+const linhas=[];
+function log(txt,tipo){ linhas.push((tipo==="erro"?"✗ ":tipo==="ok"?"✓ ":"· ")+txt); $("log").textContent=linhas.join("\n"); $("log").scrollTop=1e6; }
+
+/* ---------- diagnóstico ---------- */
+const temWebCodecs = typeof window.VideoEncoder === "function";
+const temMMS = typeof window.ManagedMediaSource === "function";
+const temMSE = typeof window.MediaSource === "function";
+const v = $("v");
+const temPiPPadrao = !!(document.pictureInPictureEnabled && v.requestPictureInPicture);
+const temPiPSafari = typeof v.webkitSetPresentationMode === "function";
+const checks=[
+  ["Picture-in-Picture padrão", temPiPPadrao],
+  ["Picture-in-Picture do Safari", temPiPSafari],
+  ["WebCodecs (VideoEncoder)", temWebCodecs],
+  ["ManagedMediaSource", temMMS],
+  ["MediaSource", temMSE],
+  ["captureStream no canvas", typeof $("palco").captureStream === "function"],
+];
+$("suporte").innerHTML = checks.map(([n,ok])=>`<div class="chk"><span>${n}</span><b class="${ok?"sim":"nao"}">${ok?"sim":"não"}</b></div>`).join("");
+log("Aparelho: "+navigator.userAgent);
+checks.forEach(([n,ok])=>log(n+": "+(ok?"sim":"não"), ok?"ok":"erro"));
+
+/* ---------- desenho do placar ---------- */
+const cv=$("palco"), ctx=cv.getContext("2d");
+let t0=Date.now();
+function desenhar(){
+  const W=cv.width,H=cv.height, seg=Math.floor((Date.now()-t0)/1000);
+  ctx.fillStyle="#080B14"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#F2C14E"; ctx.beginPath(); ctx.arc(30,38,8,0,7); ctx.fill();
+  ctx.fillStyle="#E9EDF7"; ctx.font='700 22px system-ui,sans-serif'; ctx.textAlign="left";
+  ctx.fillText("TESTE · AO VIVO",48,46);
+  ctx.textAlign="right"; ctx.fillStyle="#8C97B2"; ctx.font='600 20px system-ui,sans-serif';
+  ctx.fillText(seg+"s no ar",W-24,46);
+  ctx.textAlign="left"; ctx.font='800 34px system-ui,sans-serif'; ctx.fillStyle="#E8414B"; ctx.fillText("LULA",24,112);
+  ctx.textAlign="right"; ctx.fillStyle="#3B82F6"; ctx.fillText("FLÁVIO",W-24,112);
+  const a=50+Math.sin(seg/4)*2, b=100-a;
+  ctx.textAlign="left"; ctx.font='900 92px system-ui,sans-serif'; ctx.fillStyle="#E8414B"; ctx.fillText(a.toFixed(2).replace(".",",")+"%",20,206);
+  ctx.textAlign="right"; ctx.fillStyle="#3B82F6"; ctx.fillText(b.toFixed(2).replace(".",",")+"%",W-20,206);
+  const bx=24,by=246,bw=W-48,bh=22;
+  ctx.fillStyle="#1E2840"; ctx.fillRect(bx,by,bw,bh);
+  ctx.fillStyle="#E8414B"; ctx.fillRect(bx,by,bw*a/100,bh);
+  ctx.fillStyle="#3B82F6"; ctx.fillRect(bx+bw*a/100,by,bw*b/100,bh);
+  ctx.textAlign="center"; ctx.fillStyle="#56607a"; ctx.font='500 17px system-ui,sans-serif';
+  ctx.fillText("se os números mudam aqui, o teste está valendo",W/2,H-18);
+}
+desenhar(); setInterval(desenhar,250);
+
+/* ---------- caminho 1: PiP padrão (Android, computador) ---------- */
+async function tentarPadrao(){
+  log("Caminho 1: PiP padrão com captureStream…");
+  const stream=cv.captureStream(5);
+  v.srcObject=stream; v.removeAttribute("src");
+  await v.play(); log("vídeo tocando (captureStream)","ok");
+  await v.requestPictureInPicture();
+  log("DEU CERTO pelo caminho 1","ok"); return true;
+}
+
+/* ---------- caminho 2: PiP do Safari direto do captureStream ---------- */
+async function tentarSafariDireto(){
+  log("Caminho 2: PiP do Safari com captureStream…");
+  const stream=cv.captureStream(5);
+  v.srcObject=stream; v.removeAttribute("src");
+  await v.play(); log("vídeo tocando (captureStream)","ok");
+  if(v.webkitSupportsPresentationMode && !v.webkitSupportsPresentationMode("picture-in-picture"))
+    throw new Error("Safari diz que este vídeo não aceita janela flutuante");
+  v.webkitSetPresentationMode("picture-in-picture");
+  await new Promise(r=>setTimeout(r,900));
+  if(v.webkitPresentationMode!=="picture-in-picture") throw new Error("não entrou em janela flutuante");
+  log("DEU CERTO pelo caminho 2","ok"); return true;
+}
+
+/* ---------- caminho 3: vídeo H.264 de verdade, gerado na hora ---------- */
+function carregar(src){ return new Promise((ok,err)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>err(new Error("não baixou "+src)); document.head.appendChild(s); }); }
+
+async function tentarVideoReal(){
+  log("Caminho 3: gerar vídeo H.264 na própria página…");
+  if(!temWebCodecs) throw new Error("sem WebCodecs neste aparelho");
+  const MS = window.ManagedMediaSource || window.MediaSource;
+  if(!MS) throw new Error("sem MediaSource");
+
+  await carregar("https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js");
+  log("biblioteca de empacotamento carregada","ok");
+
+  // H.264 é o que o iPhone exige; VP9 entra só para validar a tubulação em outros navegadores.
+  const opcoes=[
+    {nome:"H.264", cfg:{codec:"avc1.42E01E",width:640,height:360,framerate:5,bitrate:900000,avc:{format:"avc"},latencyMode:"realtime"}, muxer:"avc", mime:'video/mp4; codecs="avc1.42E01E"'},
+    {nome:"VP9",   cfg:{codec:"vp09.00.10.08",width:640,height:360,framerate:5,bitrate:900000,latencyMode:"realtime"}, muxer:"vp9", mime:'video/mp4; codecs="vp09.00.10.08"'},
+  ];
+  let escolhido=null;
+  for(const o of opcoes){
+    let ok=false;
+    try{ ok=(await VideoEncoder.isConfigSupported(o.cfg)).supported; }catch(e){}
+    const mseOk = !MS.isTypeSupported || MS.isTypeSupported(o.mime);
+    log(o.nome+": codificador "+(ok?"sim":"não")+", MediaSource "+(mseOk?"sim":"não"));
+    if(ok && mseOk){ escolhido=o; break; }
+  }
+  if(!escolhido) throw new Error("este aparelho não gera vídeo pela página");
+  log("usando "+escolhido.nome,"ok");
+  const cfg=escolhido.cfg;
+
+  const ms=new MS();
+  v.srcObject=null;
+  v.disableRemotePlayback=true;
+  v.src=URL.createObjectURL(ms);
+
+  const fila=[]; let sb=null;
+  function escoar(){ if(!sb||sb.updating||!fila.length) return; try{ sb.appendBuffer(fila.shift()); }catch(e){ log("appendBuffer: "+e.message,"erro"); } }
+
+  await new Promise((ok,err)=>{
+    ms.addEventListener("sourceopen",()=>{
+      try{
+        ms.duration=Infinity;
+        sb=ms.addSourceBuffer(escolhido.mime);
+        sb.mode="sequence";
+        sb.addEventListener("updateend",escoar);
+        log("MediaSource aberto","ok"); ok();
+      }catch(e){ err(e); }
+    },{once:true});
+    ms.addEventListener("sourceclose",()=>err(new Error("MediaSource fechou sozinho")),{once:true});
+    setTimeout(()=>err(new Error("MediaSource não abriu em 5s")),5000);
+  });
+
+  const muxer=new Mp4Muxer.Muxer({
+    target:new Mp4Muxer.StreamTarget({ onData:(dados,pos)=>{ fila.push(dados.slice()); escoar(); } }),
+    video:{codec:escolhido.muxer,width:640,height:360,frameRate:5},
+    fastStart:"fragmented",
+    minimumFragmentDuration:0.2,
+    firstTimestampBehavior:"offset",
+  });
+
+  const enc=new VideoEncoder({
+    output:(chunk,meta)=>{ try{ muxer.addVideoChunk(chunk,meta); }catch(e){ log("muxer: "+e.message,"erro"); } },
+    error:e=>log("codificador: "+e.message,"erro"),
+  });
+  enc.configure(cfg);
+  log("codificador ligado","ok");
+
+  let n=0;
+  const timer=setInterval(()=>{
+    try{
+      const frame=new VideoFrame(cv,{timestamp:n*200000,duration:200000});
+      enc.encode(frame,{keyFrame:n%10===0});
+      frame.close(); n++;
+    }catch(e){ log("quadro: "+e.message,"erro"); clearInterval(timer); }
+  },200);
+
+  await new Promise(r=>setTimeout(r,1600));
+  await enc.flush().catch(()=>{});
+  log("segmentos gerados: "+n+" quadros","ok");
+
+  const buf=()=>{ try{ return sb.buffered.length ? sb.buffered.start(0).toFixed(2)+"s–"+sb.buffered.end(0).toFixed(2)+"s" : "vazio"; }catch(e){ return "?"; } };
+  log("fila do vídeo: "+buf()+" · estado "+v.readyState);
+  try{
+    await Promise.race([ v.play(), new Promise((_,x)=>setTimeout(()=>x(new Error("play não respondeu em 4s")),4000)) ]);
+    log("vídeo tocando","ok");
+  }catch(e){ log(e.message,"erro"); }
+  log("depois do play: fila "+buf()+" · estado "+v.readyState+" · tempo "+v.currentTime.toFixed(2)+"s");
+  if(v.readyState<2) throw new Error("o vídeo gerado não chegou a ter quadros prontos (estado "+v.readyState+")");
+
+  if(v.webkitSetPresentationMode){
+    if(v.webkitSupportsPresentationMode && !v.webkitSupportsPresentationMode("picture-in-picture"))
+      throw new Error("Safari ainda recusa janela flutuante para este vídeo");
+    v.webkitSetPresentationMode("picture-in-picture");
+    await new Promise(r=>setTimeout(r,1200));
+    if(v.webkitPresentationMode!=="picture-in-picture") throw new Error("não entrou em janela flutuante");
+  } else if(v.requestPictureInPicture){
+    await v.requestPictureInPicture();
+  } else throw new Error("este aparelho não tem janela flutuante");
+
+  log("DEU CERTO pelo caminho 3","ok"); return true;
+}
+
+/* ---------- orquestra ---------- */
+$("tentar").onclick=async()=>{
+  linhas.length=0; $("log").textContent="";
+  log("Aparelho: "+navigator.userAgent);
+  const caminhos=[];
+  if(temPiPPadrao) caminhos.push(tentarPadrao);
+  if(temPiPSafari) caminhos.push(tentarSafariDireto);
+  caminhos.push(tentarVideoReal);
+  for(const fn of caminhos){
+    try{ if(await fn()) { $("tentar").textContent="Funcionou! (toque para repetir)"; return; } }
+    catch(e){ log(e.message,"erro"); }
+  }
+  log("Nenhum caminho funcionou neste aparelho.","erro");
+  $("tentar").textContent="Tentar de novo";
+};
+
+$("copiar").onclick=async()=>{
+  const txt=linhas.join("\n");
+  try{ await navigator.clipboard.writeText(txt); $("copiar").textContent="Relatório copiado — cole no chat"; }
+  catch(e){ const r=document.createRange(); r.selectNodeContents($("log")); getSelection().removeAllRanges(); getSelection().addRange(r); $("copiar").textContent="Selecionado — toque em Copiar"; }
+};
+</script>
+</body>
+</html>
