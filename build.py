@@ -1,6 +1,6 @@
 """Gera a pasta site/ pronta para publicar (GitHub Pages ou qualquer hospedagem estática)."""
 import os, shutil
-os.makedirs('site', exist_ok=True)
+OUT = '.'   # a raiz do repositório: funciona tanto no modo 'branch' quanto via Actions
 page = open('src/page.html', encoding='utf-8').read()
 page = page.replace('__GEO__', open('src/ufs-min.json', encoding='utf-8').read())
 page = page.replace('__T1__', open('src/primeiro-turno.json', encoding='utf-8').read())
@@ -32,14 +32,14 @@ head = ('''<!doctype html>
 </head>
 <body>
 ''').replace('"+URL+"', URL)
-open('site/index.html', 'w', encoding='utf-8').write(head + page + '\n</body>\n</html>\n')
-shutil.copy('src/privacidade.html', 'site/privacidade.html')
-if os.path.exists('src/og.png'): shutil.copy('src/og.png', 'site/og.png')
-open('site/sitemap.xml', 'w').write(f'''<?xml version="1.0" encoding="UTF-8"?>
+open(os.path.join(OUT,'index.html'), 'w', encoding='utf-8').write(head + page + '\n</body>\n</html>\n')
+shutil.copy('src/privacidade.html', os.path.join(OUT,'privacidade.html'))
+if os.path.exists('src/og.png'): shutil.copy('src/og.png', os.path.join(OUT,'og.png'))
+open(os.path.join(OUT,'sitemap.xml'), 'w').write(f'''<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>{URL}</loc><changefreq>always</changefreq><priority>1.0</priority></url>
   <url><loc>{URL}privacidade.html</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
 </urlset>
 ''')
-open('site/.nojekyll', 'w').close()
-print('site/index.html', os.path.getsize('site/index.html'), 'bytes')
+open(os.path.join(OUT,'.nojekyll'), 'w').close()
+print('index.html', os.path.getsize(os.path.join(OUT,'index.html')), 'bytes')
