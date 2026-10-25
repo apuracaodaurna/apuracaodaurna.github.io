@@ -552,7 +552,44 @@ async function pollBr(){
   clearTimeout(brTimer);
   if(!started()){ brTimer=setTimeout(pollBr, Math.min(60000, new Date(CONFIG.inicioDivulgacao)-nowBR()+1500)); renderStatus(); return; }
   try{ S.br=parse(await get(url("br",1))); S.lastOk=new Date(); S.error=null; render(); if(!ufStarted){ufStarted=true; pollUfs();} brTimer=setTimeout(pollBr,CONFIG.pollBrMs); }
-  catch(err){ S.error=err.status===404?"aguardando":"falha"; renderStatus(); brTimer=setTimeout(pollBr, err.status===404?90000:45000); }
+  catch(err){
+    // 404 depois das 17h quase sempre significa código de eleição diferente do configurado:
+    // busca os códigos oficiais no arquivo de configuração do TSE e tenta de novo.
+    if(err.status===404 && !codigosDescobertos){
+      codigosDescobertos = true;
+      const achou = await descobrirCodigos();
+      if(achou){ brTimer=setTimeout(pollBr, 1000); return; }
+    }
+    S.error=err.status===404?"aguardando":"falha"; renderStatus();
+    brTimer=setTimeout(pollBr, err.status===404?60000:45000);
+  }
+}
+
+/* Lê https://resultados.tse.jus.br/oficial/comum/config/ele-c.json e procura, sem depender
+   do formato exato, as eleições de 2º turno federal (presidente) e estadual (governador). */
+let codigosDescobertos=false;
+function varrerEleicoes(o, saida){
+  if(!o || typeof o!=="object") return saida;
+  if(Array.isArray(o)){ for(const v of o) varrerEleicoes(v,saida); return saida; }
+  const nome=[o.nm,o.nmc,o.ds,o.dsc,o.nome].find(v=>typeof v==="string" && v.length>6);
+  const cod=[o.cd,o.cod,o.c,o.id,o.cdeleicao].map(v=>String(v==null?"":v)).find(v=>/^\d{4,6}$/.test(v));
+  if(nome && cod) saida.push({cod,nome});
+  for(const v of Object.values(o)) varrerEleicoes(v,saida);
+  return saida;
+}
+async function descobrirCodigos(){
+  try{
+    const base=CONFIG.base.replace(/\/ele\d+$/,"");
+    const lista=varrerEleicoes(await get(base+"/comum/config/ele-c.json"),[]);
+    const doSegundoTurno=/2\s*º?\s*turno|segundo\s+turno/i;
+    const fed=lista.find(e=>doSegundoTurno.test(e.nome) && /federal|presiden/i.test(e.nome));
+    const est=lista.find(e=>doSegundoTurno.test(e.nome) && /estadua|governa/i.test(e.nome));
+    let mudou=false;
+    if(fed && fed.cod!==CONFIG.eleicao){ CONFIG.eleicao=fed.cod; mudou=true; }
+    if(est && est.cod!==CONFIG.eleicaoEstadual){ CONFIG.eleicaoEstadual=est.cod; mudou=true; }
+    if(mudou){ S.uf={}; S.gov={}; for(const k in skip404) delete skip404[k]; firstSweep=true; }
+    return mudou;
+  }catch(e){ return false; }
 }
 async function pollUfs(){
   clearTimeout(ufTimer);
@@ -581,7 +618,9 @@ function renderStatus(){
   } else if(S.br && S.br.pst>=100){ pill.classList.add("done"); t.textContent="Apuração encerrada"; notice.innerHTML=""; }
   else if(S.br){ pill.classList.add("live"); t.textContent="Ao vivo"; notice.innerHTML= br&&br.hasVotes ? "" : "<b>Urnas fechadas.</b> Aguardando os primeiros boletins totalizados pelo TSE."; }
   else { t.textContent= S.error==="falha" ? "Sem resposta do TSE" : "Aguardando TSE";
-    notice.innerHTML = S.error==="falha" ? "<b>Não foi possível ler os dados do TSE agora.</b> O site tenta de novo automaticamente; se persistir, recarregue a página." : "<b>Urnas fechadas.</b> Aguardando os primeiros dados do TSE."; }
+    notice.innerHTML = S.error==="falha"
+      ? '<b>Não foi possível ler os dados do TSE agora.</b> O site tenta de novo sozinho a cada 45 segundos. Enquanto isso, veja direto em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.'
+      : '<b>Urnas fechadas.</b> Aguardando os primeiros boletins totalizados pelo TSE. Esta página se atualiza sozinha.'; }
   notice.hidden = !notice.innerHTML;
   const last = S.br&&S.br.hg ? `TSE ${S.br.dg} ${S.br.hg}` : nowBR().toLocaleTimeString("pt-BR",{timeZone:"America/Sao_Paulo",hour:"2-digit",minute:"2-digit"})+" (Brasília)";
   $("clock").textContent=last;
