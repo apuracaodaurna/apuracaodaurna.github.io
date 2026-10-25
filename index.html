@@ -957,20 +957,35 @@ function drawPip(){
   c.textAlign="center"; c.fillStyle=CO.muted; c.font="500 17px "+B;
   c.fillText("P10 · Apuração da Urna · dados oficiais do TSE"+(S.br&&S.br.hg?" · "+S.br.hg.slice(0,5):""),W/2,H-18);
 }
-async function openPip(){
-  try{
-    if(document.pictureInPictureElement){ await document.exitPictureInPicture(); return; }
-    if(pipVideo.webkitPresentationMode==="picture-in-picture"){ pipVideo.webkitSetPresentationMode("inline"); pararVideoReal(); return; }
-    drawPip();
-    if(temPiPPadrao){
+/* O Safari só aceita abrir a janela flutuante no mesmo instante do toque.
+   Por isso, no iPhone, o vídeo é preparado antes e o toque apenas aciona. */
+function openPip(){
+  if(!temPiPPadrao){
+    try{
+      if(pipVideo.webkitPresentationMode==="picture-in-picture"){
+        pipVideo.webkitSetPresentationMode("inline"); pararVideoReal(); return;
+      }
+      if(!videoPronto){
+        prepararVideoReal();
+        pipIndisponivel("preparando o vídeo, toque de novo em alguns segundos");
+        return;
+      }
+      drawPip();
+      pipVideo.webkitSetPresentationMode("picture-in-picture");   // dentro do gesto
+      clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
+    }catch(e){ pipIndisponivel(e && e.message ? e.message : ""); }
+    return;
+  }
+  return (async()=>{
+    try{
+      if(document.pictureInPictureElement){ await document.exitPictureInPicture(); return; }
+      drawPip();
       if(!pipStream){ pipStream=pipCanvas.captureStream(4); pipVideo.srcObject=pipStream; }
       await pipVideo.play();
       await pipVideo.requestPictureInPicture();
-    } else {
-      await abrirViaVideoReal();
-    }
-    clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
-  }catch(e){ pipIndisponivel(e && e.message ? e.message : ""); }
+      clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
+    }catch(e){ pipIndisponivel(e && e.message ? e.message : ""); }
+  })();
 }
 /* Sem alerta: avisa na própria página e esconde o botão. Navegador dentro de outro
    app (WhatsApp, Instagram) costuma bloquear o modo flutuante. */
@@ -982,7 +997,16 @@ function pipIndisponivel(motivo){
 }
 pipVideo.addEventListener("enterpictureinpicture",()=>{ clearInterval(pipTimer); pipTimer=setInterval(drawPip,500); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Fechar":"Fechar placar flutuante"); });
 pipVideo.addEventListener("leavepictureinpicture",()=>{ clearInterval(pipTimer); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Flutuante":"Abrir placar flutuante"); });
-if(pipOk){ $("pipRow").hidden=false; document.querySelectorAll("[data-pip]").forEach(b=>{ b.hidden=false; b.onclick=openPip; }); }
+if(pipOk){
+  $("pipRow").hidden=false;
+  document.querySelectorAll("[data-pip]").forEach(b=>{ b.hidden=false; b.onclick=openPip; });
+  if(!temPiPPadrao){
+    // prepara no primeiro toque da pessoa na página, para o toque no botão abrir na hora
+    const iniciar=()=>{ prepararVideoReal(); };
+    addEventListener("touchstart", iniciar, {once:true, passive:true});
+    addEventListener("pointerdown", iniciar, {once:true, passive:true});
+  }
+}
 
 /* ======== PLACAR NO TÍTULO DA ABA ======== */
 const baseTitle=document.title||"Apuração da Urna";
@@ -999,6 +1023,7 @@ function updateTitle(){
    Tudo é carregado só quando a pessoa toca no botão. */
 let encVideo=null, encTimer=null, encN=0, msVideo=null, sbVideo=null;
 function pararVideoReal(){
+  videoPronto=false; preparando=null;
   clearInterval(encTimer); encTimer=null;
   try{ if(encVideo && encVideo.state!=="closed") encVideo.close(); }catch(e){}
   encVideo=null;
@@ -1010,7 +1035,13 @@ function carregarScript(src){
     document.head.appendChild(s);
   });
 }
-async function abrirViaVideoReal(){
+let videoPronto=false, preparando=null;
+function prepararVideoReal(){
+  if(preparando) return preparando;
+  preparando = montarVideoReal().catch(e=>{ preparando=null; pipIndisponivel(e && e.message ? e.message : ""); });
+  return preparando;
+}
+async function montarVideoReal(){
   if(!temVideoReal) throw new Error("sem suporte a vídeo gerado");
   const MS = window.ManagedMediaSource || window.MediaSource;
   if(!window.Mp4Muxer) await carregarScript("https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js");
@@ -1079,18 +1110,17 @@ async function abrirViaVideoReal(){
     }catch(e){ clearInterval(encTimer); }
   },250);
 
-  // espera o vídeo ter quadros prontos antes de pedir a janela flutuante
-  const limite=Date.now()+6000;
+  // deixa o vídeo tocando e pronto; quem abre a janela é o toque da pessoa
+  const limite=Date.now()+8000;
   while(pipVideo.readyState<2 && Date.now()<limite) await new Promise(r=>setTimeout(r,150));
   try{ await Promise.race([pipVideo.play(), new Promise((_,x)=>setTimeout(()=>x(new Error("play")),4000))]); }catch(e){}
   if(pipVideo.readyState<2){ pararVideoReal(); throw new Error("o vídeo não ficou pronto"); }
-
   if(pipVideo.webkitSupportsPresentationMode && !pipVideo.webkitSupportsPresentationMode("picture-in-picture")){
     pararVideoReal(); throw new Error("o Safari recusou a janela flutuante");
   }
-  pipVideo.webkitSetPresentationMode("picture-in-picture");
-  await new Promise(r=>setTimeout(r,1200));
-  if(pipVideo.webkitPresentationMode!=="picture-in-picture"){ pararVideoReal(); throw new Error("não abriu a janela flutuante"); }
+  videoPronto=true;
+  const b=document.querySelector("#pipRow [data-pip] .t, #pipRow [data-pip]");
+  if(b && b.lastChild && b.lastChild.nodeType===3) b.lastChild.textContent="Abrir placar flutuante";
 }
 pipVideo.addEventListener("webkitpresentationmodechanged",()=>{
   if(pipVideo.webkitPresentationMode==="inline") pararVideoReal();
