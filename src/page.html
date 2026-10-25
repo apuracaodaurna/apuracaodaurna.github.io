@@ -623,7 +623,18 @@ async function pollUfs(){
 
 /* ======== RENDER ======== */
 /* Quanto tempo sem o TSE publicar nada novo antes de avisar na tela. */
-const PARADO_MIN = 2;
+const PARADO_MIN = 3;
+/* Idade do dado pelo carimbo do próprio TSE (dg + hg, horário de Brasília).
+   Assim o aviso já aparece quando a pessoa abre a página, sem esperar. */
+function idadeTSEmin(){
+  if(!S.br || !S.br.dg || !S.br.hg) return null;
+  const d=String(S.br.dg).split("/"), h=String(S.br.hg).trim();
+  if(d.length!==3 || !/^\d{2}:\d{2}:\d{2}$/.test(h)) return null;
+  const t=Date.parse(`${d[2]}-${d[1]}-${d[0]}T${h}-03:00`);
+  if(!Number.isFinite(t)) return null;
+  const min=Math.floor((Date.now()-t)/60000);
+  return (min>=0 && min<1440) ? min : null;
+}
 let marcoTSE = null, marcoChave = "";
 /* Contexto factual, com fonte. Não afirmamos nada que o TSE não tenha anunciado. */
 const CONTEXTO_19H = 'Segundo Bloomberg Línea, Times Brasil e outros veículos de imprensa, o TSE interrompeu a divulgação dos resultados após a decisão do ministro Cristiano Zanin, do STF, que prorrogou a votação até as 19h (horário de Brasília) em todo o país. Não há horário anunciado para a retomada. Esta página volta a atualizar sozinha assim que o TSE publicar novos boletins — acompanhe também em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.';
@@ -638,7 +649,8 @@ function renderStatus(){
     notice.innerHTML=`<b>Votação em andamento até as 17h (horário de Brasília).</b> Pela lei eleitoral, o TSE só divulga resultados depois que todas as urnas do país fecham. O placar começa a se mexer sozinho a partir das 17h. Enquanto isso, veja no mapa como cada estado votou no 1º turno.`;
   } else if(S.br && S.br.pst>=100){ pill.classList.add("done"); t.textContent="Apuração encerrada"; notice.innerHTML=""; }
   else if(S.br){
-    const paradoMin = marcoTSE ? Math.floor((Date.now()-marcoTSE)/60000) : 0;
+    const local = marcoTSE ? Math.floor((Date.now()-marcoTSE)/60000) : 0;
+    const paradoMin = Math.max(local, idadeTSEmin() ?? 0);
     if(paradoMin>=PARADO_MIN){
       pill.classList.add("live"); t.textContent="Sem novos dados";
       notice.innerHTML = `<b>Apuração parada há ${paradoMin} ${paradoMin===1?"minuto":"minutos"}</b>, em ${fmtP(S.br.pst)} das seções totalizadas. `+CONTEXTO_19H;
