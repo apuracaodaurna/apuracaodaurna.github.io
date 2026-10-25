@@ -90,8 +90,13 @@ function desenhar(){
   ctx.textAlign="left"; ctx.font='800 34px system-ui,sans-serif'; ctx.fillStyle="#E8414B"; ctx.fillText("LULA",24,112);
   ctx.textAlign="right"; ctx.fillStyle="#3B82F6"; ctx.fillText("FLÁVIO",W-24,112);
   const a=50+Math.sin(seg/4)*2, b=100-a;
-  ctx.textAlign="left"; ctx.font='900 92px system-ui,sans-serif'; ctx.fillStyle="#E8414B"; ctx.fillText(a.toFixed(2).replace(".",",")+"%",20,206);
-  ctx.textAlign="right"; ctx.fillStyle="#3B82F6"; ctx.fillText(b.toFixed(2).replace(".",",")+"%",W-20,206);
+  const ta=a.toFixed(2).replace(".",",")+"%", tb=b.toFixed(2).replace(".",",")+"%";
+  // diminui a fonte até cada número caber na sua metade, para nunca se sobreporem
+  let fs=92; const metade=W/2-28;
+  do{ ctx.font='900 '+fs+'px system-ui,sans-serif'; fs-=4; }
+  while(fs>36 && Math.max(ctx.measureText(ta).width,ctx.measureText(tb).width)>metade);
+  ctx.textAlign="left";  ctx.fillStyle="#E8414B"; ctx.fillText(ta,20,206);
+  ctx.textAlign="right"; ctx.fillStyle="#3B82F6"; ctx.fillText(tb,W-20,206);
   const bx=24,by=246,bw=W-48,bh=22;
   ctx.fillStyle="#1E2840"; ctx.fillRect(bx,by,bw,bh);
   ctx.fillStyle="#E8414B"; ctx.fillRect(bx,by,bw*a/100,bh);
