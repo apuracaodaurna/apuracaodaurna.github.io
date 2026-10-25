@@ -622,6 +622,12 @@ async function pollUfs(){
 }
 
 /* ======== RENDER ======== */
+/* Quanto tempo sem o TSE publicar nada novo antes de avisar na tela. */
+const PARADO_MIN = 5;
+let marcoTSE = null, marcoChave = "";
+/* Contexto factual, com fonte. Não afirmamos nada que o TSE não tenha anunciado. */
+const CONTEXTO_19H = 'A votação foi prorrogada até as 19h (horário de Brasília) por decisão do ministro Cristiano Zanin, do STF, após pedidos das duas campanhas. Até agora o TSE não anunciou oficialmente pausa na divulgação nem horário de retomada. Esta página volta a atualizar sozinha assim que novos boletins forem publicados. Acompanhe também em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.';
+
 function renderStatus(){
   const pill=$("pill"), t=$("pillTxt"), notice=$("notice");
   pill.className="pill";
@@ -631,7 +637,16 @@ function renderStatus(){
     t.textContent=`Divulgação em ${h}h${String(m).padStart(2,"0")}m${String(s).padStart(2,"0")}s`;
     notice.innerHTML=`<b>Votação em andamento até as 17h (horário de Brasília).</b> Pela lei eleitoral, o TSE só divulga resultados depois que todas as urnas do país fecham. O placar começa a se mexer sozinho a partir das 17h. Enquanto isso, veja no mapa como cada estado votou no 1º turno.`;
   } else if(S.br && S.br.pst>=100){ pill.classList.add("done"); t.textContent="Apuração encerrada"; notice.innerHTML=""; }
-  else if(S.br){ pill.classList.add("live"); t.textContent="Ao vivo"; notice.innerHTML= br&&br.hasVotes ? "" : "<b>Urnas fechadas.</b> Aguardando os primeiros boletins totalizados pelo TSE."; }
+  else if(S.br){
+    const paradoMin = marcoTSE ? Math.floor((Date.now()-marcoTSE)/60000) : 0;
+    if(paradoMin>=PARADO_MIN){
+      pill.classList.add("live"); t.textContent="Sem novos dados";
+      notice.innerHTML = `<b>O TSE não publica novos dados há ${paradoMin} minutos</b>, com ${fmtP(S.br.pst)} das seções totalizadas. `+CONTEXTO_19H;
+    } else {
+      pill.classList.add("live"); t.textContent="Ao vivo";
+      notice.innerHTML = br&&br.hasVotes ? "" : "<b>Urnas fechadas.</b> Aguardando os primeiros boletins totalizados pelo TSE.";
+    }
+  }
   else { t.textContent= S.error==="falha" ? "Sem resposta do TSE" : "Aguardando TSE";
     notice.innerHTML = S.error==="falha"
       ? '<b>Não foi possível ler os dados do TSE agora.</b> O site tenta de novo sozinho a cada 45 segundos. Enquanto isso, veja direto em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.'
@@ -641,6 +656,10 @@ function renderStatus(){
   $("clock").textContent=last;
 }
 function render(){
+  if(S.br){
+    const chave = String(S.br.pst)+"|"+String(S.br.st)+"|"+String(S.br.hg);
+    if(chave!==marcoChave){ marcoChave=chave; marcoTSE=Date.now(); }
+  }
   renderStatus();
   const br=pair(S.br);
   const live = br && br.hasVotes;
