@@ -902,7 +902,11 @@ const PIP={w:640,h:360};
 if(!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h){ this.rect(x,y,w,h); };
 const pipCanvas=document.createElement("canvas"); pipCanvas.width=PIP.w; pipCanvas.height=PIP.h;
 const pipVideo=$("pipVideo"); let pipStream=null, pipTimer=null;
-const pipOk = !!(pipCanvas.captureStream && ((document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) || pipVideo.webkitSupportsPresentationMode));
+/* iPhone e iPad: o Safari só aceita janela flutuante de vídeo real, não de um
+   canvas desenhado pela página. Nem oferecemos o botão, para não frustrar. */
+const ehIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+const pipOk = !ehIOS && !!(pipCanvas.captureStream && ((document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) || pipVideo.webkitSupportsPresentationMode));
 function drawPip(){
   const c=pipCanvas.getContext("2d"), W=PIP.w, H=PIP.h;
   const D="'Big Shoulders Display','Arial Narrow',Impact,sans-serif", B="'IBM Plex Sans',system-ui,sans-serif";
@@ -966,7 +970,7 @@ function pipIndisponivel(){
   clearInterval(pipTimer);
   document.querySelectorAll("[data-pip]").forEach(b=>{ b.hidden=true; });
   const row=$("pipRow");
-  if(row){ row.hidden=false; row.innerHTML='<span>O placar flutuante não funciona neste navegador. Abra <b>apuracaodaurna.github.io</b> direto no Chrome ou no Safari — dentro do WhatsApp ou do Instagram esse recurso fica bloqueado.</span>'; }
+  if(row){ row.hidden=false; row.innerHTML='<span>Este navegador não permite o placar flutuante. Ele funciona no Chrome e no Edge, no Android e no computador. Dentro do WhatsApp ou do Instagram fica bloqueado.</span>'; }
 }
 pipVideo.addEventListener("enterpictureinpicture",()=>{ clearInterval(pipTimer); pipTimer=setInterval(drawPip,500); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Fechar":"Fechar placar flutuante"); });
 pipVideo.addEventListener("leavepictureinpicture",()=>{ clearInterval(pipTimer); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Flutuante":"Abrir placar flutuante"); });
