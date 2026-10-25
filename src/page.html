@@ -185,6 +185,22 @@ td .w{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8
 .extra .v{font-family:var(--f-display);font-weight:800;font-size:30px}
 .extra .k{font-size:12px;color:var(--muted)}
 
+/* convite de apoio que sobe de baixo */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;justify-content:center;
+  padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));transform:translateY(130%);
+  transition:transform .45s cubic-bezier(.2,.8,.3,1);pointer-events:none}
+.sheet.on{transform:translateY(0);pointer-events:auto}
+.sheet-in{width:100%;max-width:560px;background:var(--panel);border:1px solid color-mix(in srgb,var(--gold) 45%,var(--line));
+  border-radius:16px;padding:16px 18px;box-shadow:0 24px 60px -18px rgba(0,0,0,.75)}
+.sheet h3{font-family:var(--f-display);font-weight:900;font-size:24px;text-transform:uppercase;margin:4px 0 6px}
+.sheet p{margin:0;color:var(--muted);font-size:14px}
+.sheet .chave{display:block;margin-top:12px;font-family:var(--f-num);font-size:13px;background:var(--ink);
+  border:1px solid var(--line);border-radius:10px;padding:11px 10px;text-align:center;word-break:break-all}
+.sheet .acoes{display:flex;gap:10px;margin-top:12px}
+.sheet .acoes .btn{flex:1;justify-content:center;text-align:center}
+.sheet .depois{all:unset;cursor:pointer;color:var(--muted);font-size:13px;padding:12px 14px;text-align:center;flex:0 0 auto}
+.sheet .depois:hover{color:var(--text)}
+
 /* card de apoio (Pix) */
 .apoio{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:center;
   margin-block:22px;padding:20px 24px;border-radius:16px;
@@ -453,6 +469,19 @@ footer p{margin:.3em 0;max-width:80ch}
 
   <div class="ad" data-slot="rodape">Publicidade</div>
 </main>
+
+<div class="sheet" id="apoioSheet" role="dialog" aria-labelledby="apoioTitulo" aria-modal="false">
+  <div class="sheet-in">
+    <span class="eyebrow">Apoie este placar</span>
+    <h3 id="apoioTitulo">Gostou? Ajude a manter no ar</h3>
+    <p>Este site é feito por uma pessoa só, sem patrocínio e sem cobrar nada de quem acessa. Um Pix de qualquer valor ajuda.</p>
+    <span class="chave num" id="sheetChave"></span>
+    <div class="acoes">
+      <button class="btn primary" id="sheetCopiar">Copiar chave Pix</button>
+      <button class="depois" id="sheetDepois">agora não</button>
+    </div>
+  </div>
+</div>
 
 <section class="sobre" id="sobre">
   <div class="wrap">
@@ -1173,10 +1202,41 @@ function applyTheme(t){
   };
 })();
 
+/* ======== CONVITE DE APOIO ========
+   Sobe depois de alguns minutos de uso, nunca cobre o placar e some sozinho.
+   Quem dispensa vê no máximo mais uma vez; quem copia a chave não vê mais. */
+const APOIO={ primeiro: 4*60*1000, intervalo: 25*60*1000, maximo: 2 };
+function jaApoiou(){ try{ return localStorage.getItem("apoiou")==="1"; }catch(e){ return false; } }
+function vezesVistas(){ try{ return Number(localStorage.getItem("apoio-vezes")||0)||0; }catch(e){ return 0; } }
+function marcarVista(){ try{ localStorage.setItem("apoio-vezes", String(vezesVistas()+1)); }catch(e){} }
+function fecharApoio(){ $("apoioSheet").classList.remove("on"); }
+function mostrarApoio(){
+  if(!MONETIZACAO.pix || jaApoiou() || vezesVistas()>=APOIO.maximo) return;
+  if(document.pictureInPictureElement || pipVideo.webkitPresentationMode==="picture-in-picture") return;
+  if(!$("win").hidden) return;                       // não atrapalha a tela do eleito
+  $("sheetChave").textContent=MONETIZACAO.pix;
+  $("apoioSheet").classList.add("on");
+  marcarVista();
+  setTimeout(fecharApoio, 30000);                    // some sozinho em 30s
+}
+function initApoio(){
+  if(!MONETIZACAO.pix) return;
+  $("sheetDepois").onclick=fecharApoio;
+  $("sheetCopiar").onclick=async()=>{
+    try{ await navigator.clipboard.writeText(MONETIZACAO.pix); $("sheetCopiar").textContent="Chave copiada, obrigado!"; }
+    catch(e){ const r=document.createRange(); r.selectNodeContents($("sheetChave")); getSelection().removeAllRanges(); getSelection().addRange(r); $("sheetCopiar").textContent="Selecionado — toque em Copiar"; }
+    try{ localStorage.setItem("apoiou","1"); }catch(e){}
+    setTimeout(fecharApoio,2500);
+  };
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") fecharApoio(); });
+  if(jaApoiou() || vezesVistas()>=APOIO.maximo) return;
+  setTimeout(()=>{ mostrarApoio(); setInterval(mostrarApoio, APOIO.intervalo); }, APOIO.primeiro);
+}
+
 /* ======== INÍCIO ======== */
 setPhoto("phL",SQ_INICIAL.l); setPhoto("phF",SQ_INICIAL.f);
 try{ initMap(); }catch(e){ console.error(e); }
-initAds(); initShare(); initPresenca();
+initAds(); initShare(); initPresenca(); initApoio();
 if(!started()) setMode("t1");
 render(); pollBr();
 setInterval(()=>{ renderStatus(); if(started() && !S.br && !brTimer) pollBr(); },1000);
