@@ -649,10 +649,10 @@ async function pollUfs(){
 
 /* ======== RENDER ======== */
 /* Quanto tempo sem o TSE publicar nada novo antes de avisar na tela. */
-const PARADO_MIN = 5;
+const PARADO_MIN = 2;
 let marcoTSE = null, marcoChave = "";
 /* Contexto factual, com fonte. Não afirmamos nada que o TSE não tenha anunciado. */
-const CONTEXTO_19H = 'A votação foi prorrogada até as 19h (horário de Brasília) por decisão do ministro Cristiano Zanin, do STF, após pedidos das duas campanhas. Até agora o TSE não anunciou oficialmente pausa na divulgação nem horário de retomada. Esta página volta a atualizar sozinha assim que novos boletins forem publicados. Acompanhe também em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.';
+const CONTEXTO_19H = 'Segundo Bloomberg Línea, Times Brasil e outros veículos de imprensa, o TSE interrompeu a divulgação dos resultados após a decisão do ministro Cristiano Zanin, do STF, que prorrogou a votação até as 19h (horário de Brasília) em todo o país. Não há horário anunciado para a retomada. Esta página volta a atualizar sozinha assim que o TSE publicar novos boletins — acompanhe também em <a href="https://resultados.tse.jus.br" target="_blank" rel="noopener">resultados.tse.jus.br</a>.';
 
 function renderStatus(){
   const pill=$("pill"), t=$("pillTxt"), notice=$("notice");
@@ -667,7 +667,7 @@ function renderStatus(){
     const paradoMin = marcoTSE ? Math.floor((Date.now()-marcoTSE)/60000) : 0;
     if(paradoMin>=PARADO_MIN){
       pill.classList.add("live"); t.textContent="Sem novos dados";
-      notice.innerHTML = `<b>O TSE não publica novos dados há ${paradoMin} minutos</b>, com ${fmtP(S.br.pst)} das seções totalizadas. `+CONTEXTO_19H;
+      notice.innerHTML = `<b>Apuração parada há ${paradoMin} ${paradoMin===1?"minuto":"minutos"}</b>, em ${fmtP(S.br.pst)} das seções totalizadas. `+CONTEXTO_19H;
     } else {
       pill.classList.add("live"); t.textContent="Ao vivo";
       notice.innerHTML = br&&br.hasVotes ? "" : "<b>Urnas fechadas.</b> Aguardando os primeiros boletins totalizados pelo TSE.";
