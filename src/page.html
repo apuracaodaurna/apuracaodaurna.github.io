@@ -82,8 +82,9 @@ h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:
 .notice b{color:var(--text)}
 
 /* anúncios */
-.ad{margin-block:22px;display:grid;place-items:center;min-height:100px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;overflow:hidden}
-.ad.tall{min-height:260px}
+.ad{display:none}
+.ad.on{margin-block:22px;display:grid;place-items:center;min-height:100px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;overflow:hidden}
+.ad.on.tall{min-height:260px}
 .ad ins{display:block;width:100%}
 
 /* mapa */
@@ -153,6 +154,19 @@ td .w{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8
 .extra{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
 .extra .v{font-family:var(--f-display);font-weight:800;font-size:30px}
 .extra .k{font-size:12px;color:var(--muted)}
+
+/* card de apoio (Pix) */
+.apoio{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:center;
+  margin-block:22px;padding:20px 24px;border-radius:16px;
+  background:linear-gradient(120deg,rgba(242,193,78,.10),rgba(242,193,78,.03));
+  border:1px solid color-mix(in srgb,var(--gold) 38%,transparent)}
+.apoio h2{font-size:30px;font-weight:900;text-transform:uppercase;margin-top:6px}
+.apoio p{color:var(--muted);margin:.5em 0 0;max-width:52ch}
+.apoio-pix{display:grid;gap:10px;justify-items:stretch}
+.apoio .pix{font-family:var(--f-num);font-size:14px;background:var(--ink);border:1px solid var(--line);
+  border-radius:10px;padding:12px 14px;word-break:break-all;text-align:center}
+.apoio .btn{justify-content:center;text-align:center}
+@media (max-width:760px){ .apoio{grid-template-columns:1fr;padding:18px} .apoio h2{font-size:24px} .apoio .pix{font-size:11.5px;padding:11px 8px} }
 
 /* apoio */
 .support{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;background:linear-gradient(120deg,#141c31,#0d1220);border:1px solid var(--line);border-radius:16px;padding:20px}
@@ -309,7 +323,18 @@ footer p{margin:.3em 0;max-width:80ch}
     <div class="notice" id="notice"></div>
   </div>
 
-  <div class="ad" data-slot="topo">Publicidade</div>
+  <section class="apoio" id="apoioBox" hidden>
+    <div class="apoio-txt">
+      <div class="eyebrow">Apoie este placar</div>
+      <h2>Feito por uma pessoa só</h2>
+      <p>Sem patrocínio e sem cobrar nada de quem acessa. Se este placar te ajudar a acompanhar a apuração hoje, contribua com um Pix de qualquer valor.</p>
+    </div>
+    <div class="apoio-pix">
+      <span class="eyebrow">Chave Pix</span>
+      <span class="pix" id="pixKey"></span>
+      <button class="btn primary" id="pixCopy">Copiar chave Pix</button>
+    </div>
+  </section>
 
   <div class="stage">
     <div class="mapbox" id="mapbox">
@@ -380,10 +405,6 @@ footer p{margin:.3em 0;max-width:80ch}
       <div>
         <h2>Mande para o grupo da família</h2>
         <p>O placar atualiza sozinho a cada minuto, direto dos dados oficiais do TSE. Compartilhe com quem está acompanhando a apuração.</p>
-        <div id="pixBox" hidden>
-          <p style="margin-top:14px">Gostou? Ajude a manter o site no ar com um Pix de qualquer valor:</p>
-          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><span class="pix" id="pixKey"></span><button class="btn" id="pixCopy">Copiar chave Pix</button></div>
-        </div>
       </div>
       <div class="btns">
         <a class="btn primary" id="wa" href="#" target="_blank" rel="noopener">Compartilhar no WhatsApp</a>
@@ -662,7 +683,7 @@ function initAds(){
   if(!MONETIZACAO.adsenseClient) return;
   const s=document.createElement("script"); s.async=true; s.crossOrigin="anonymous";
   s.src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client="+MONETIZACAO.adsenseClient; document.head.appendChild(s);
-  document.querySelectorAll(".ad[data-slot]").forEach(box=>{ const slot=MONETIZACAO.adsenseSlots[box.dataset.slot]; box.textContent="";
+  document.querySelectorAll(".ad[data-slot]").forEach(box=>{ const slot=MONETIZACAO.adsenseSlots[box.dataset.slot]; box.textContent=""; box.classList.add("on");
     const ins=document.createElement("ins"); ins.className="adsbygoogle"; ins.dataset.adClient=MONETIZACAO.adsenseClient; if(slot) ins.dataset.adSlot=slot; ins.dataset.adFormat="auto"; ins.dataset.fullWidthResponsive="true"; box.appendChild(ins);
     (window.adsbygoogle=window.adsbygoogle||[]).push({}); });
 }
@@ -671,7 +692,7 @@ function initShare(){
   const msg="Acompanhe a apuração do 2º turno ao vivo, estado por estado, com mapa 3D: "+link;
   $("wa").href="https://wa.me/?text="+encodeURIComponent(msg);
   $("copyLink").onclick=async()=>{ try{ await navigator.clipboard.writeText(link); $("copied").hidden=false; setTimeout(()=>$("copied").hidden=true,2000);}catch(e){ $("copied").textContent=link; $("copied").hidden=false; } };
-  if(MONETIZACAO.pix){ $("pixBox").hidden=false; $("pixKey").textContent=MONETIZACAO.pix; $("pixCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(MONETIZACAO.pix); $("pixCopy").textContent="Chave copiada"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("pixKey")); getSelection().removeAllRanges(); getSelection().addRange(r);} }; }
+  if(MONETIZACAO.pix){ $("apoioBox").hidden=false; $("pixKey").textContent=MONETIZACAO.pix; $("pixCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(MONETIZACAO.pix); $("pixCopy").textContent="Chave copiada"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("pixKey")); getSelection().removeAllRanges(); getSelection().addRange(r);} }; }
 }
 
 /* ======== MINI-PLACAR (acompanha a rolagem) ======== */
