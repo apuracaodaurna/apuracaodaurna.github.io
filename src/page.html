@@ -246,6 +246,8 @@ footer p{margin:.3em 0;max-width:80ch}
 .pip-btn[hidden]{display:none}
 .pip-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
 .pip-row .pip-btn{font-size:14px;padding:9px 16px;background:color-mix(in srgb,var(--gold) 12%,transparent)}
+.dica-x{all:unset;cursor:pointer;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.dica-x:hover{color:var(--text)}
 #pipVideo{position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
 @media (max-width:640px){
   .mini .wrap{grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px}
@@ -994,6 +996,21 @@ function initPresenca(){
   document.head.appendChild(s);
 }
 
+/* ======== DICA PARA IPHONE ========
+   Sem janela flutuante no iOS, o melhor que dá é virar ícone na tela de início.
+   Some para sempre quando a pessoa dispensa. */
+function dicaIOS(){
+  if(!ehIOS) return;
+  if(navigator.standalone) return;                                  // já está na tela de início
+  if(/FBAN|FBAV|Instagram|Line\/|Twitter|MicroMessenger|GSA/.test(navigator.userAgent)) return; // navegador dentro de outro app
+  try{ if(localStorage.getItem("dica-inicio")==="1") return; }catch(e){}
+  const row=$("pipRow"); if(!row) return;
+  row.hidden=false;
+  row.innerHTML='<span>Dica para iPhone: toque em <b>Compartilhar</b> na barra do Safari e escolha <b>Adicionar à Tela de Início</b>. O placar vira um ícone e abre em tela cheia com um toque.</span><button class="dica-x" id="dicaX">dispensar</button>';
+  const x=$("dicaX");
+  if(x) x.onclick=()=>{ row.hidden=true; try{ localStorage.setItem("dica-inicio","1"); }catch(e){} };
+}
+
 /* ======== MODO CLARO / ESCURO ======== */
 function applyTheme(t){
   document.documentElement.setAttribute("data-theme",t);
@@ -1019,7 +1036,7 @@ function applyTheme(t){
 /* ======== INÍCIO ======== */
 setPhoto("phL",SQ_INICIAL.l); setPhoto("phF",SQ_INICIAL.f);
 try{ initMap(); }catch(e){ console.error(e); }
-initAds(); initShare(); initPresenca();
+initAds(); initShare(); initPresenca(); dicaIOS();
 if(!started()) setMode("t1");
 render(); pollBr();
 setInterval(()=>{ renderStatus(); if(started() && !S.br && !brTimer) pollBr(); },1000);
