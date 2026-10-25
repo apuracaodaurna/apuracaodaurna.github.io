@@ -878,11 +878,15 @@ const PIP={w:640,h:360};
 if(!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h){ this.rect(x,y,w,h); };
 const pipCanvas=document.createElement("canvas"); pipCanvas.width=PIP.w; pipCanvas.height=PIP.h;
 const pipVideo=$("pipVideo"); let pipStream=null, pipTimer=null;
-/* iPhone e iPad: o Safari só aceita janela flutuante de vídeo real, não de um
-   canvas desenhado pela página. Nem oferecemos o botão, para não frustrar. */
 const ehIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-const pipOk = !ehIOS && !!(pipCanvas.captureStream && ((document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) || pipVideo.webkitSupportsPresentationMode));
+/* Android e computador usam o modo padrão. O iPhone não aceita janela flutuante
+   de canvas, só de vídeo de verdade — para ele geramos um vídeo H.264 na hora. */
+const temPiPPadrao = !!(document.pictureInPictureEnabled && pipVideo.requestPictureInPicture);
+const temVideoReal = !!(typeof window.VideoEncoder==="function"
+  && (window.ManagedMediaSource || window.MediaSource)
+  && pipVideo.webkitSetPresentationMode);
+const pipOk = !!pipCanvas.captureStream && (temPiPPadrao || temVideoReal);
 function drawPip(){
   const c=pipCanvas.getContext("2d"), W=PIP.w, H=PIP.h;
   const D="'Big Shoulders Display','Arial Narrow',Impact,sans-serif", B="'IBM Plex Sans',system-ui,sans-serif";
@@ -930,13 +934,15 @@ function drawPip(){
 async function openPip(){
   try{
     if(document.pictureInPictureElement){ await document.exitPictureInPicture(); return; }
-    if(pipVideo.webkitPresentationMode==="picture-in-picture"){ pipVideo.webkitSetPresentationMode("inline"); return; }
+    if(pipVideo.webkitPresentationMode==="picture-in-picture"){ pipVideo.webkitSetPresentationMode("inline"); pararVideoReal(); return; }
     drawPip();
-    if(!pipStream){ pipStream=pipCanvas.captureStream(4); pipVideo.srcObject=pipStream; }
-    await pipVideo.play();
-    if(document.pictureInPictureEnabled && pipVideo.requestPictureInPicture) await pipVideo.requestPictureInPicture();
-    else if(pipVideo.webkitSupportsPresentationMode && pipVideo.webkitSupportsPresentationMode("picture-in-picture")) pipVideo.webkitSetPresentationMode("picture-in-picture");
-    else throw new Error("sem suporte");
+    if(temPiPPadrao){
+      if(!pipStream){ pipStream=pipCanvas.captureStream(4); pipVideo.srcObject=pipStream; }
+      await pipVideo.play();
+      await pipVideo.requestPictureInPicture();
+    } else {
+      await abrirViaVideoReal();
+    }
     clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
   }catch(e){ pipIndisponivel(); }
 }
@@ -959,6 +965,110 @@ function updateTitle(){
   if(w){ document.title=`✅ ${side(w.nome,w.sg)==="l"?"Lula":"Flávio"} eleito ${fmtP(w.pvap)} · Apuração da Urna`; return; }
   document.title = br&&br.hasVotes ? `🔴 Lula ${fmtP(br.l)} × ${fmtP(br.f)} Flávio · Apuração da Urna` : baseTitle;
 }
+
+/* ======== PLACAR FLUTUANTE NO IPHONE ========
+   O Safari só coloca em janela flutuante um vídeo de verdade. Então codificamos
+   o desenho do placar em H.264 aqui mesmo, montamos um MP4 em pedaços e
+   entregamos ao vídeo como se fosse uma transmissão ao vivo.
+   Tudo é carregado só quando a pessoa toca no botão. */
+let encVideo=null, encTimer=null, encN=0, msVideo=null, sbVideo=null;
+function pararVideoReal(){
+  clearInterval(encTimer); encTimer=null;
+  try{ if(encVideo && encVideo.state!=="closed") encVideo.close(); }catch(e){}
+  encVideo=null;
+}
+function carregarScript(src){
+  return new Promise((ok,err)=>{
+    const s=document.createElement("script"); s.src=src; s.async=true; s.crossOrigin="anonymous";
+    s.onload=ok; s.onerror=()=>err(new Error("não foi possível baixar o empacotador de vídeo"));
+    document.head.appendChild(s);
+  });
+}
+async function abrirViaVideoReal(){
+  if(!temVideoReal) throw new Error("sem suporte a vídeo gerado");
+  const MS = window.ManagedMediaSource || window.MediaSource;
+  if(!window.Mp4Muxer) await carregarScript("https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js");
+
+  const L=PIP.w, A=PIP.h;
+  const cfg={codec:"avc1.42E01E",width:L,height:A,framerate:4,bitrate:800000,avc:{format:"avc"},latencyMode:"realtime"};
+  const mime='video/mp4; codecs="avc1.42E01E"';
+  let suportado=false;
+  try{ suportado=(await VideoEncoder.isConfigSupported(cfg)).supported; }catch(e){}
+  if(!suportado || (MS.isTypeSupported && !MS.isTypeSupported(mime)))
+    throw new Error("este aparelho não gera vídeo H.264");
+
+  pararVideoReal();
+  msVideo=new MS();
+  pipVideo.srcObject=null;
+  pipVideo.disableRemotePlayback=true;
+  pipVideo.src=URL.createObjectURL(msVideo);
+
+  const fila=[];
+  function escoar(){
+    if(!sbVideo || sbVideo.updating || !fila.length) return;
+    try{ sbVideo.appendBuffer(fila.shift()); }catch(e){ fila.length=0; }
+  }
+  await new Promise((ok,err)=>{
+    msVideo.addEventListener("sourceopen",()=>{
+      try{
+        msVideo.duration=Infinity;
+        sbVideo=msVideo.addSourceBuffer(mime);
+        sbVideo.mode="sequence";
+        sbVideo.addEventListener("updateend",()=>{
+          // descarta o que já passou, senão a memória cresce sem parar
+          try{
+            if(!sbVideo.updating && sbVideo.buffered.length){
+              const fim=sbVideo.buffered.end(0), ini=sbVideo.buffered.start(0);
+              if(fim-ini>30) { sbVideo.remove(ini, fim-15); return; }
+            }
+          }catch(e){}
+          escoar();
+        });
+        ok();
+      }catch(e){ err(e); }
+    },{once:true});
+    setTimeout(()=>err(new Error("o vídeo não iniciou")),6000);
+  });
+
+  const muxer=new Mp4Muxer.Muxer({
+    target:new Mp4Muxer.StreamTarget({ onData:(dados,pos)=>{ fila.push(dados.slice()); escoar(); } }),
+    video:{codec:"avc",width:L,height:A,frameRate:4},
+    fastStart:"fragmented",
+    minimumFragmentDuration:0.25,
+    firstTimestampBehavior:"offset",
+  });
+  encVideo=new VideoEncoder({
+    output:(chunk,meta)=>{ try{ muxer.addVideoChunk(chunk,meta); }catch(e){} },
+    error:()=>{},
+  });
+  encVideo.configure(cfg);
+  encN=0;
+  encTimer=setInterval(()=>{
+    if(!encVideo || encVideo.state!=="configured"){ clearInterval(encTimer); return; }
+    try{
+      drawPip();
+      const quadro=new VideoFrame(pipCanvas,{timestamp:encN*250000,duration:250000});
+      encVideo.encode(quadro,{keyFrame:encN%8===0});
+      quadro.close(); encN++;
+    }catch(e){ clearInterval(encTimer); }
+  },250);
+
+  // espera o vídeo ter quadros prontos antes de pedir a janela flutuante
+  const limite=Date.now()+6000;
+  while(pipVideo.readyState<2 && Date.now()<limite) await new Promise(r=>setTimeout(r,150));
+  try{ await Promise.race([pipVideo.play(), new Promise((_,x)=>setTimeout(()=>x(new Error("play")),4000))]); }catch(e){}
+  if(pipVideo.readyState<2){ pararVideoReal(); throw new Error("o vídeo não ficou pronto"); }
+
+  if(pipVideo.webkitSupportsPresentationMode && !pipVideo.webkitSupportsPresentationMode("picture-in-picture")){
+    pararVideoReal(); throw new Error("o Safari recusou a janela flutuante");
+  }
+  pipVideo.webkitSetPresentationMode("picture-in-picture");
+  await new Promise(r=>setTimeout(r,1200));
+  if(pipVideo.webkitPresentationMode!=="picture-in-picture"){ pararVideoReal(); throw new Error("não abriu a janela flutuante"); }
+}
+pipVideo.addEventListener("webkitpresentationmodechanged",()=>{
+  if(pipVideo.webkitPresentationMode==="inline") pararVideoReal();
+});
 
 /* ======== QUEM ESTÁ VENDO AGORA ========
    Contagem real de abas conectadas, via canal de presença do Supabase.
@@ -1036,7 +1146,7 @@ function applyTheme(t){
 /* ======== INÍCIO ======== */
 setPhoto("phL",SQ_INICIAL.l); setPhoto("phF",SQ_INICIAL.f);
 try{ initMap(); }catch(e){ console.error(e); }
-initAds(); initShare(); initPresenca(); dicaIOS();
+initAds(); initShare(); initPresenca();
 if(!started()) setMode("t1");
 render(); pollBr();
 setInterval(()=>{ renderStatus(); if(started() && !S.br && !brTimer) pollBr(); },1000);
