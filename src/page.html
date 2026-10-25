@@ -248,7 +248,7 @@ footer p{margin:.3em 0;max-width:80ch}
 .pip-row .pip-btn{font-size:14px;padding:9px 16px;background:color-mix(in srgb,var(--gold) 12%,transparent)}
 .dica-x{all:unset;cursor:pointer;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 .dica-x:hover{color:var(--text)}
-#pipVideo{position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+#pipVideo{position:fixed;left:6px;bottom:6px;width:90px;height:51px;opacity:.01;pointer-events:none;z-index:0;border:0}
 @media (max-width:640px){
   .mini .wrap{grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px}
   .mini .pip-btn .t{display:none}
@@ -944,15 +944,15 @@ async function openPip(){
       await abrirViaVideoReal();
     }
     clearInterval(pipTimer); pipTimer=setInterval(drawPip,500);
-  }catch(e){ pipIndisponivel(); }
+  }catch(e){ pipIndisponivel(e && e.message ? e.message : ""); }
 }
 /* Sem alerta: avisa na própria página e esconde o botão. Navegador dentro de outro
    app (WhatsApp, Instagram) costuma bloquear o modo flutuante. */
-function pipIndisponivel(){
+function pipIndisponivel(motivo){
   clearInterval(pipTimer);
   document.querySelectorAll("[data-pip]").forEach(b=>{ b.hidden=true; });
   const row=$("pipRow");
-  if(row){ row.hidden=false; row.innerHTML='<span>Este navegador não permite o placar flutuante. Ele funciona no Chrome e no Edge, no Android e no computador. Dentro do WhatsApp ou do Instagram fica bloqueado.</span>'; }
+  if(row){ row.hidden=false; row.innerHTML='<span>Não foi possível abrir o placar flutuante neste navegador.'+(motivo?' <small style="opacity:.75">('+motivo+')</small>':'')+' Ele funciona no Chrome e no Edge, no Android e no computador; dentro do WhatsApp ou do Instagram fica bloqueado.</span>'; }
 }
 pipVideo.addEventListener("enterpictureinpicture",()=>{ clearInterval(pipTimer); pipTimer=setInterval(drawPip,500); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Fechar":"Fechar placar flutuante"); });
 pipVideo.addEventListener("leavepictureinpicture",()=>{ clearInterval(pipTimer); document.querySelectorAll("[data-pip]").forEach(b=>b.lastChild.textContent=b.closest(".mini")?"Flutuante":"Abrir placar flutuante"); });
